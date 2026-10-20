@@ -1,0 +1,21 @@
+<!--
+  Добавьте эти строки в android/app/src/main/AndroidManifest.xml
+  внутри тега <manifest ...> (permissions) и <application ...> (service),
+  рядом с уже существующими записями, которые создаёт `flutter create`.
+-->
+
+<!-- Разрешения на геолокацию -->
+<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+<uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION"/>
+<uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+<uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION"/>
+<uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+<uses-permission android:name="android.permission.INTERNET"/>
+
+<!--
+  Внутри <application>, если используете geolocator с фоновым
+  режимом на Android, добавьте foreground-сервис (пакет geolocator
+  уже включает нужный сервис — начиная с geolocator ^13, просто
+  убедитесь что compileSdkVersion в android/app/build.gradle >= 34.
+-->
