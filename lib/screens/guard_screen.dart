@@ -6,8 +6,10 @@ import '../services/location_service.dart';
 import 'role_select_screen.dart';
 
 class GuardScreen extends StatefulWidget {
+  final String siteId;
+  final String siteName;
   final int slot;
-  const GuardScreen({super.key, required this.slot});
+  const GuardScreen({super.key, required this.siteId, required this.siteName, required this.slot});
 
   @override
   State<GuardScreen> createState() => _GuardScreenState();
@@ -20,16 +22,20 @@ class _GuardScreenState extends State<GuardScreen> {
   bool _onShift = false;
   bool? _inZone;
   double? _distanceToEdge;
-  ZoneConfig? _zone;
+  Site? _site;
   String _note = 'Потребуется доступ к геолокации. Держите приложение запущенным во время смены.';
 
   @override
   void initState() {
     super.initState();
-    _location = LocationService(firestore: _firestore, slot: widget.slot);
-    _firestore.watchZone().listen((z) {
-      _zone = z;
-      _location.updateZone(z);
+    _location = LocationService(firestore: _firestore, siteId: widget.siteId, slot: widget.slot);
+    _firestore.watchSites().listen((sites) {
+      Site? match;
+      for (final s in sites) {
+        if (s.id == widget.siteId) match = s;
+      }
+      _site = match;
+      _location.updateSite(match);
       if (mounted) setState(() {});
     });
   }
@@ -41,8 +47,8 @@ class _GuardScreenState extends State<GuardScreen> {
         setState(() => _note = 'Нет разрешения на геолокацию. Включите его в настройках телефона.');
         return;
       }
-      if (_zone == null) {
-        setState(() => _note = 'Начальник ещё не настроил зону объекта.');
+      if (_site == null) {
+        setState(() => _note = 'Объект не найден — возможно, начальник его удалил.');
       }
       setState(() {
         _onShift = true;
@@ -103,7 +109,7 @@ class _GuardScreenState extends State<GuardScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Охранник ${widget.slot}'),
+        title: Text('Охранник ${widget.slot} · ${widget.siteName}'),
         actions: [
           IconButton(
             icon: const Icon(Icons.logout),

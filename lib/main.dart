@@ -44,8 +44,15 @@ class _StartupRouter extends StatelessWidget {
         final prefs = snap.data!;
         final role = prefs.getString('role');
         if (role == 'guard') {
-          final slot = prefs.getInt('slot') ?? 1;
-          return GuardScreen(slot: slot);
+          final siteId = prefs.getString('siteId');
+          final siteName = prefs.getString('siteName');
+          final slot = prefs.getInt('slot');
+          if (siteId != null && siteName != null && slot != null) {
+            return GuardScreen(siteId: siteId, siteName: siteName, slot: slot);
+          }
+          // Incomplete saved state (e.g. from before multi-site support) —
+          // fall back to picking role/site again.
+          return const RoleSelectScreen();
         } else if (role == 'boss') {
           return const BossScreen();
         }

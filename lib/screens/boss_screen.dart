@@ -4,7 +4,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/guard_status.dart';
 import '../services/firestore_service.dart';
 import 'role_select_screen.dart';
+import 'site_detail_screen.dart';
 
+/// Boss's home screen: the list of all managed sites (e.g. several ЖК),
+/// each with a quick status summary. Tap a site to see its guards, zone
+/// settings and event log; use the + button to add a new site.
 class BossScreen extends StatefulWidget {
   const BossScreen({super.key});
 
@@ -14,62 +18,12 @@ class BossScreen extends StatefulWidget {
 
 class _BossScreenState extends State<BossScreen> {
   final _firestore = FirestoreService();
-  final _latCtrl = TextEditingController();
-  final _lngCtrl = TextEditingController();
-  final _radiusCtrl = TextEditingController(text: '100');
-  String _zoneNote = '';
-
-  static const _typeLabels = {
-    'enter': 'вошёл в зону',
-    'exit': 'вышел из зоны',
-    'shift_start': 'начал смену',
-    'shift_end': 'закончил смену',
-  };
-
-  @override
-  void initState() {
-    super.initState();
-    _firestore.watchZone().listen((z) {
-      if (z == null || !mounted) return;
-      _latCtrl.text = z.lat.toStringAsFixed(6);
-      _lngCtrl.text = z.lng.toStringAsFixed(6);
-      _radiusCtrl.text = z.radiusM.toStringAsFixed(0);
-    });
-  }
-
-  Future<void> _useMyLocation() async {
-    setState(() => _zoneNote = 'Определяем ваше местоположение…');
-    try {
-      LocationPermission perm = await Geolocator.checkPermission();
-      if (perm == LocationPermission.denied) {
-        perm = await Geolocator.requestPermission();
-      }
-      final pos = await Geolocator.getCurrentPosition();
-      _latCtrl.text = pos.latitude.toStringAsFixed(6);
-      _lngCtrl.text = pos.longitude.toStringAsFixed(6);
-      setState(() => _zoneNote = 'Местоположение подставлено. Нажмите «Сохранить зону».');
-    } catch (e) {
-      setState(() => _zoneNote = 'Ошибка: $e');
-    }
-  }
-
-  Future<void> _saveZone() async {
-    final lat = double.tryParse(_latCtrl.text);
-    final lng = double.tryParse(_lngCtrl.text);
-    final radius = double.tryParse(_radiusCtrl.text) ?? 100;
-    if (lat == null || lng == null) {
-      setState(() => _zoneNote = 'Укажите корректные координаты.');
-      return;
-    }
-    await _firestore.saveZone(ZoneConfig(lat: lat, lng: lng, radiusM: radius));
-    setState(() => _zoneNote = 'Зона сохранена ✓');
-  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('👔 Панель начальника'),
+        title: const Text('👔 Объекты'),
         actions: [
           IconButton(
             icon: const Icon(Icons.logout),
@@ -82,147 +36,184 @@ class _BossScreenState extends State<BossScreen> {
           ),
         ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          _sectionCard('Охранники', _guardList()),
-          const SizedBox(height: 14),
-          _sectionCard('Зона объекта', _zoneSetup()),
-          const SizedBox(height: 14),
-          _sectionCard('Журнал событий', _eventsLog()),
-        ],
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _showAddSiteDialog,
+        icon: const Icon(Icons.add),
+        label: const Text('Объект'),
+      ),
+      body: StreamBuilder<List<Site>>(
+        stream: _firestore.watchSites(),
+        builder: (context, snap) {
+          if (!snap.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          final sites = snap.data!;
+          if (sites.isEmpty) {
+            return const Padding(
+              padding: EdgeInsets.all(24),
+              child: Center(
+                child: Text(
+                  'Пока нет ни одного объекта.\nНажмите «+ Объект», чтобы добавить первый (например, ЖК).',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.grey),
+                ),
+              ),
+            );
+          }
+          return ListView.separated(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
+            itemCount: sites.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 10),
+            itemBuilder: (context, i) => _SiteCard(site: sites[i], firestore: _firestore),
+          );
+        },
       ),
     );
   }
 
-  Widget _sectionCard(String title, Widget child) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(title.toUpperCase(),
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.grey.shade600)),
-            const SizedBox(height: 10),
-            child,
+  void _showAddSiteDialog() {
+    final nameCtrl = TextEditingController();
+    final latCtrl = TextEditingController();
+    final lngCtrl = TextEditingController();
+    final radiusCtrl = TextEditingController(text: '100');
+    String note = '';
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: const Text('Новый объект'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                TextField(
+                  controller: nameCtrl,
+                  decoration: const InputDecoration(labelText: 'Название (например, ЖК Достар)'),
+                ),
+                const SizedBox(height: 8),
+                TextField(controller: latCtrl, decoration: const InputDecoration(labelText: 'Широта (latitude)')),
+                const SizedBox(height: 8),
+                TextField(controller: lngCtrl, decoration: const InputDecoration(labelText: 'Долгота (longitude)')),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: radiusCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Радиус зоны, метров'),
+                ),
+                const SizedBox(height: 10),
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    setDialogState(() => note = 'Определяем местоположение…');
+                    try {
+                      LocationPermission perm = await Geolocator.checkPermission();
+                      if (perm == LocationPermission.denied) {
+                        perm = await Geolocator.requestPermission();
+                      }
+                      final pos = await Geolocator.getCurrentPosition();
+                      latCtrl.text = pos.latitude.toStringAsFixed(6);
+                      lngCtrl.text = pos.longitude.toStringAsFixed(6);
+                      setDialogState(() => note = 'Местоположение подставлено.');
+                    } catch (e) {
+                      setDialogState(() => note = 'Ошибка: $e');
+                    }
+                  },
+                  icon: const Icon(Icons.my_location),
+                  label: const Text('Моё текущее место'),
+                ),
+                if (note.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(note, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Отмена')),
+            FilledButton(
+              onPressed: () async {
+                final name = nameCtrl.text.trim();
+                final lat = double.tryParse(latCtrl.text);
+                final lng = double.tryParse(lngCtrl.text);
+                final radius = double.tryParse(radiusCtrl.text) ?? 100;
+                if (name.isEmpty || lat == null || lng == null) {
+                  setDialogState(() => note = 'Заполните название и корректные координаты.');
+                  return;
+                }
+                await _firestore.addSite(name: name, lat: lat, lng: lng, radiusM: radius);
+                if (dialogContext.mounted) Navigator.pop(dialogContext);
+              },
+              child: const Text('Добавить'),
+            ),
           ],
         ),
       ),
     );
   }
+}
 
-  Widget _guardList() {
-    return Column(
-      children: [1, 2, 3].map((slot) {
-        return StreamBuilder<GuardStatus>(
-          stream: _firestore.watchGuard(slot),
-          builder: (context, snap) {
-            final s = snap.data;
-            String label = 'Нет данных';
-            MaterialColor color = Colors.grey;
-            String meta = '';
-            if (s != null) {
-              if (!s.onShift) {
-                label = 'Не на смене';
-                color = Colors.grey;
-              } else if (s.inZone) {
-                label = 'В зоне';
-                color = Colors.green;
-              } else {
-                label = 'Вне зоны';
-                color = Colors.red;
-              }
-              if (s.updatedAt != null) {
-                meta = 'Обновлено: ${_fmtTime(s.updatedAt!)}';
-              }
-            }
-            return ListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text('Охранник $slot', style: const TextStyle(fontWeight: FontWeight.w600)),
-              subtitle: meta.isNotEmpty ? Text(meta, style: const TextStyle(fontSize: 12)) : null,
-              trailing: Chip(
-                label: Text(label, style: TextStyle(color: color.shade800, fontWeight: FontWeight.bold, fontSize: 12)),
-                backgroundColor: color.shade50,
-                side: BorderSide.none,
-              ),
-            );
-          },
-        );
-      }).toList(),
-    );
-  }
+/// A summary card for one site: name, radius, and a compact row showing
+/// each of the 3 guard slots' current status.
+class _SiteCard extends StatelessWidget {
+  final Site site;
+  final FirestoreService firestore;
+  const _SiteCard({required this.site, required this.firestore});
 
-  Widget _zoneSetup() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        TextField(controller: _latCtrl, decoration: const InputDecoration(labelText: 'Широта (latitude)')),
-        const SizedBox(height: 8),
-        TextField(controller: _lngCtrl, decoration: const InputDecoration(labelText: 'Долгота (longitude)')),
-        const SizedBox(height: 8),
-        TextField(
-          controller: _radiusCtrl,
-          keyboardType: TextInputType.number,
-          decoration: const InputDecoration(labelText: 'Радиус зоны, метров'),
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => SiteDetailScreen(site: site)),
         ),
-        const SizedBox(height: 12),
-        OutlinedButton.icon(
-          onPressed: _useMyLocation,
-          icon: const Icon(Icons.my_location),
-          label: const Text('Моё текущее место'),
-        ),
-        const SizedBox(height: 8),
-        FilledButton(onPressed: _saveZone, child: const Text('Сохранить зону')),
-        if (_zoneNote.isNotEmpty) ...[
-          const SizedBox(height: 6),
-          Text(_zoneNote, style: const TextStyle(color: Colors.grey, fontSize: 12)),
-        ],
-      ],
-    );
-  }
-
-  Widget _eventsLog() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        StreamBuilder<List<Map<String, dynamic>>>(
-          stream: _firestore.watchEvents(),
-          builder: (context, snap) {
-            final events = snap.data ?? [];
-            if (events.isEmpty) {
-              return const Padding(
-                padding: EdgeInsets.symmetric(vertical: 8),
-                child: Text('Событий пока нет.', style: TextStyle(color: Colors.grey)),
-              );
-            }
-            return Column(
-              children: events.map((e) {
-                final ts = DateTime.fromMillisecondsSinceEpoch(e['timestamp']);
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 6),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('Охранник ${e['slot']} — ${_typeLabels[e['type']] ?? e['type']}',
-                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-                      Text(_fmtTime(ts), style: const TextStyle(color: Colors.grey, fontSize: 12)),
-                    ],
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(site.name,
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                   ),
-                );
-              }).toList(),
-            );
-          },
+                  const Icon(Icons.chevron_right, color: Colors.grey),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text('Радиус зоны: ${site.radiusM.round()} м',
+                  style: const TextStyle(color: Colors.grey, fontSize: 12)),
+              const SizedBox(height: 10),
+              Row(
+                children: [1, 2, 3].map((slot) {
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: StreamBuilder<GuardStatus>(
+                      stream: firestore.watchGuard(site.id, slot),
+                      builder: (context, snap) {
+                        final s = snap.data;
+                        MaterialColor color = Colors.grey;
+                        if (s != null && s.onShift) {
+                          color = s.inZone ? Colors.green : Colors.red;
+                        }
+                        return Chip(
+                          label: Text('$slot', style: TextStyle(color: color.shade800, fontWeight: FontWeight.bold)),
+                          backgroundColor: color.shade50,
+                          side: BorderSide.none,
+                          visualDensity: VisualDensity.compact,
+                        );
+                      },
+                    ),
+                  );
+                }).toList(),
+              ),
+            ],
+          ),
         ),
-        const SizedBox(height: 8),
-        OutlinedButton(onPressed: _firestore.clearEvents, child: const Text('Очистить журнал')),
-      ],
+      ),
     );
-  }
-
-  String _fmtTime(DateTime dt) {
-    final local = dt.toLocal();
-    String two(int n) => n.toString().padLeft(2, '0');
-    return '${two(local.day)}.${two(local.month)} ${two(local.hour)}:${two(local.minute)}';
   }
 }
