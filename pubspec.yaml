@@ -26,6 +26,10 @@ dependencies:
   # Notifications shown on the phone
   flutter_local_notifications: ^18.0.1
 
+  # Interactive map for picking a site's zone (OpenStreetMap — free, no API key)
+  flutter_map: ^7.0.2
+  latlong2: ^0.9.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

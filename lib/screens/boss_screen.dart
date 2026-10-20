@@ -5,6 +5,7 @@ import '../models/guard_status.dart';
 import '../services/firestore_service.dart';
 import 'role_select_screen.dart';
 import 'site_detail_screen.dart';
+import 'map_picker_screen.dart';
 
 /// Boss's home screen: the list of all managed sites (e.g. several ЖК),
 /// each with a quick status summary. Tap a site to see its guards, zone
@@ -103,6 +104,29 @@ class _BossScreenState extends State<BossScreen> {
                   decoration: const InputDecoration(labelText: 'Радиус зоны, метров'),
                 ),
                 const SizedBox(height: 10),
+                FilledButton.icon(
+                  onPressed: () async {
+                    final result = await Navigator.push<MapPickResult>(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => MapPickerScreen(
+                          initialLat: double.tryParse(latCtrl.text),
+                          initialLng: double.tryParse(lngCtrl.text),
+                          initialRadiusM: double.tryParse(radiusCtrl.text) ?? 100,
+                        ),
+                      ),
+                    );
+                    if (result != null) {
+                      latCtrl.text = result.lat.toStringAsFixed(6);
+                      lngCtrl.text = result.lng.toStringAsFixed(6);
+                      radiusCtrl.text = result.radiusM.round().toString();
+                      setDialogState(() => note = 'Место выбрано на карте ✓');
+                    }
+                  },
+                  icon: const Icon(Icons.map),
+                  label: const Text('Выбрать на карте'),
+                ),
+                const SizedBox(height: 8),
                 OutlinedButton.icon(
                   onPressed: () async {
                     setDialogState(() => note = 'Определяем местоположение…');

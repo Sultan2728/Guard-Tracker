@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import '../models/guard_status.dart';
 import '../services/firestore_service.dart';
+import 'map_picker_screen.dart';
 
 /// Boss's view of a single site (e.g. one ЖК): its geofence settings,
 /// the live status of its 3 guard slots, and its event log.
@@ -59,6 +60,27 @@ class _SiteDetailScreenState extends State<SiteDetailScreen> {
       setState(() => _zoneNote = 'Местоположение подставлено. Нажмите «Сохранить».');
     } catch (e) {
       setState(() => _zoneNote = 'Ошибка: $e');
+    }
+  }
+
+  Future<void> _pickOnMap() async {
+    final result = await Navigator.push<MapPickResult>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => MapPickerScreen(
+          initialLat: double.tryParse(_latCtrl.text),
+          initialLng: double.tryParse(_lngCtrl.text),
+          initialRadiusM: double.tryParse(_radiusCtrl.text) ?? 100,
+        ),
+      ),
+    );
+    if (result != null) {
+      setState(() {
+        _latCtrl.text = result.lat.toStringAsFixed(6);
+        _lngCtrl.text = result.lng.toStringAsFixed(6);
+        _radiusCtrl.text = result.radiusM.round().toString();
+        _zoneNote = 'Место выбрано на карте. Нажмите «Сохранить».';
+      });
     }
   }
 
@@ -192,6 +214,12 @@ class _SiteDetailScreenState extends State<SiteDetailScreen> {
           decoration: const InputDecoration(labelText: 'Радиус зоны, метров'),
         ),
         const SizedBox(height: 12),
+        FilledButton.icon(
+          onPressed: _pickOnMap,
+          icon: const Icon(Icons.map),
+          label: const Text('Выбрать на карте'),
+        ),
+        const SizedBox(height: 8),
         OutlinedButton.icon(
           onPressed: _useMyLocation,
           icon: const Icon(Icons.my_location),
