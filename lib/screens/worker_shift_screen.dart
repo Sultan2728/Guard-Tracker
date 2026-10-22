@@ -1,21 +1,23 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../models/guard_status.dart';
+import '../models/worker.dart';
+import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
 import '../services/location_service.dart';
-import 'role_select_screen.dart';
 
-class GuardScreen extends StatefulWidget {
-  final String siteId;
-  final String siteName;
-  final int slot;
-  const GuardScreen({super.key, required this.siteId, required this.siteName, required this.slot});
+/// A worker's (guard, cleaner, plumber, …) shift screen: start/stop the
+/// shift, see whether they're currently inside their assigned site's
+/// zone. Replaces the old slot-based GuardScreen — a worker is now tied
+/// to their own account and whichever site the boss assigned them to.
+class WorkerShiftScreen extends StatefulWidget {
+  final Worker worker;
+  const WorkerShiftScreen({super.key, required this.worker});
 
   @override
-  State<GuardScreen> createState() => _GuardScreenState();
+  State<WorkerShiftScreen> createState() => _WorkerShiftScreenState();
 }
 
-class _GuardScreenState extends State<GuardScreen> {
+class _WorkerShiftScreenState extends State<WorkerShiftScreen> {
   final _firestore = FirestoreService();
   late final LocationService _location;
 
@@ -28,14 +30,16 @@ class _GuardScreenState extends State<GuardScreen> {
   @override
   void initState() {
     super.initState();
-    _location = LocationService(firestore: _firestore, siteId: widget.siteId, slot: widget.slot);
-    _firestore.watchSites().listen((sites) {
-      Site? match;
-      for (final s in sites) {
-        if (s.id == widget.siteId) match = s;
-      }
-      _site = match;
-      _location.updateSite(match);
+    _location = LocationService(
+      firestore: _firestore,
+      workerId: widget.worker.id,
+      workerName: widget.worker.name,
+      role: widget.worker.role,
+      siteId: widget.worker.siteId!,
+    );
+    _firestore.watchSite(widget.worker.siteId!).listen((site) {
+      _site = site;
+      _location.updateSite(site);
       if (mounted) setState(() {});
     });
   }
@@ -109,17 +113,9 @@ class _GuardScreenState extends State<GuardScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Охранник ${widget.slot} · ${widget.siteName}'),
+        title: Text('${widget.worker.role} · ${_site?.name ?? '…'}'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () async {
-              final prefs = await SharedPreferences.getInstance();
-              await prefs.clear();
-              if (!mounted) return;
-              Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const RoleSelectScreen()));
-            },
-          ),
+          IconButton(icon: const Icon(Icons.logout), onPressed: () => AuthService().signOut()),
         ],
       ),
       body: Padding(
@@ -127,6 +123,8 @@ class _GuardScreenState extends State<GuardScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            Text('Здравствуйте, ${widget.worker.name}', style: const TextStyle(color: Colors.grey)),
+            const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(

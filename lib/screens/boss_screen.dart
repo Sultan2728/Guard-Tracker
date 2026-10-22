@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../models/guard_status.dart';
+import '../models/worker.dart';
+import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
-import 'role_select_screen.dart';
 import 'site_detail_screen.dart';
 import 'map_picker_screen.dart';
+import 'employees_screen.dart';
 
 /// Boss's home screen: the list of all managed sites (e.g. several ЖК),
-/// each with a quick status summary. Tap a site to see its guards, zone
-/// settings and event log; use the + button to add a new site.
+/// each with a quick status summary. Tap a site to see its workers, zone
+/// settings and event log; use the + button to add a new site. The
+/// people icon opens employee management (approvals, assignments).
 class BossScreen extends StatefulWidget {
   const BossScreen({super.key});
 
@@ -26,14 +28,27 @@ class _BossScreenState extends State<BossScreen> {
       appBar: AppBar(
         title: const Text('👔 Объекты'),
         actions: [
+          StreamBuilder<List<Worker>>(
+            stream: _firestore.watchPendingWorkers(),
+            builder: (context, snap) {
+              final pendingCount = snap.data?.length ?? 0;
+              return IconButton(
+                icon: Badge(
+                  label: Text('$pendingCount'),
+                  isLabelVisible: pendingCount > 0,
+                  child: const Icon(Icons.people_outline),
+                ),
+                tooltip: 'Сотрудники',
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const EmployeesScreen()),
+                ),
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.logout),
-            onPressed: () async {
-              final prefs = await SharedPreferences.getInstance();
-              await prefs.clear();
-              if (!mounted) return;
-              Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const RoleSelectScreen()));
-            },
+            onPressed: () => AuthService().signOut(),
           ),
         ],
       ),
@@ -177,8 +192,8 @@ class _BossScreenState extends State<BossScreen> {
   }
 }
 
-/// A summary card for one site: name, radius, and a compact row showing
-/// each of the 3 guard slots' current status.
+/// A summary card for one site: name, radius, and how many of its
+/// assigned workers are currently on shift / in zone.
 class _SiteCard extends StatelessWidget {
   final Site site;
   final FirestoreService firestore;
@@ -211,28 +226,36 @@ class _SiteCard extends StatelessWidget {
               Text('Радиус зоны: ${site.radiusM.round()} м',
                   style: const TextStyle(color: Colors.grey, fontSize: 12)),
               const SizedBox(height: 10),
-              Row(
-                children: [1, 2, 3].map((slot) {
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: StreamBuilder<GuardStatus>(
-                      stream: firestore.watchGuard(site.id, slot),
-                      builder: (context, snap) {
-                        final s = snap.data;
-                        MaterialColor color = Colors.grey;
-                        if (s != null && s.onShift) {
-                          color = s.inZone ? Colors.green : Colors.red;
-                        }
-                        return Chip(
-                          label: Text('$slot', style: TextStyle(color: color.shade800, fontWeight: FontWeight.bold)),
-                          backgroundColor: color.shade50,
-                          side: BorderSide.none,
-                          visualDensity: VisualDensity.compact,
-                        );
-                      },
-                    ),
+              StreamBuilder<List<Worker>>(
+                stream: firestore.watchWorkersForSite(site.id),
+                builder: (context, snap) {
+                  final workers = snap.data ?? [];
+                  if (workers.isEmpty) {
+                    return const Text('Сотрудники не назначены', style: TextStyle(color: Colors.grey, fontSize: 12));
+                  }
+                  return Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: workers.map((w) {
+                      return StreamBuilder<ShiftStatus>(
+                        stream: firestore.watchStatus(w.id),
+                        builder: (context, statusSnap) {
+                          final s = statusSnap.data;
+                          MaterialColor color = Colors.grey;
+                          if (s != null && s.onShift) {
+                            color = s.inZone ? Colors.green : Colors.red;
+                          }
+                          return Chip(
+                            label: Text(w.name, style: TextStyle(color: color.shade800, fontSize: 12)),
+                            backgroundColor: color.shade50,
+                            side: BorderSide.none,
+                            visualDensity: VisualDensity.compact,
+                          );
+                        },
+                      );
+                    }).toList(),
                   );
-                }).toList(),
+                },
               ),
             ],
           ),

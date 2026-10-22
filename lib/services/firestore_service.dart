@@ -1,21 +1,22 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/guard_status.dart';
+import '../models/worker.dart';
 
 /// Wraps all Firestore reads/writes so the rest of the app never touches
 /// collection/document paths directly.
 ///
-/// Firestore layout (supports several sites / objects, e.g. several ЖК,
-/// each with its own geofence and its own 3 guard slots):
-///   sites/{siteId}                       -> { name, lat, lng, radiusM }
-///   status/{siteId}_guard{slot}          -> { siteId, slot, onShift, inZone, lat, lng, accuracy, updatedAt }
-///   events/{autoId}                      -> { siteId, slot, type, timestamp, lat, lng }
-///   tokens/boss                          -> { fcmToken } (for push notifications)
+/// Firestore layout:
+///   sites/{siteId}        -> { name, lat, lng, radiusM }
+///   workers/{uid}         -> { name, phone, role, isBoss, status, siteId, createdAt }
+///   status/{uid}          -> { onShift, inZone, lat, lng, accuracy, updatedAt }
+///   events/{autoId}       -> { workerId, workerName, role, siteId, type, timestamp, lat, lng }
+///   tokens/{uid}          -> { fcmToken } (for push notifications)
 class FirestoreService {
   final _db = FirebaseFirestore.instance;
 
   CollectionReference get _sitesRef => _db.collection('sites');
-  DocumentReference _statusRef(String siteId, int slot) =>
-      _db.collection('status').doc('${siteId}_guard$slot');
+  CollectionReference get _workersRef => _db.collection('workers');
+  DocumentReference _statusRef(String workerId) => _db.collection('status').doc(workerId);
   CollectionReference get _eventsRef => _db.collection('events');
   DocumentReference _tokenRef(String id) => _db.collection('tokens').doc(id);
 
@@ -24,6 +25,13 @@ class FirestoreService {
     return _sitesRef.orderBy('name').snapshots().map((snap) => snap.docs
         .map((d) => Site.fromMap(d.id, d.data() as Map<String, dynamic>?))
         .toList());
+  }
+
+  Stream<Site?> watchSite(String siteId) {
+    return _sitesRef.doc(siteId).snapshots().map((snap) {
+      if (!snap.exists) return null;
+      return Site.fromMap(snap.id, snap.data() as Map<String, dynamic>?);
+    });
   }
 
   Future<Site> addSite({
@@ -48,30 +56,72 @@ class FirestoreService {
 
   Future<void> deleteSite(String siteId) async {
     await _sitesRef.doc(siteId).delete();
-    // Also clean up this site's 3 guard status docs, best-effort.
-    for (final slot in [1, 2, 3]) {
-      await _statusRef(siteId, slot).delete();
+    // Unassign (not delete) any workers who were on this site.
+    final assigned = await _workersRef.where('siteId', isEqualTo: siteId).get();
+    for (final d in assigned.docs) {
+      await d.reference.update({'siteId': null});
     }
   }
 
-  // ---------- Guard status ----------
-  Stream<GuardStatus> watchGuard(String siteId, int slot) {
-    return _statusRef(siteId, slot).snapshots().map(
-        (snap) => GuardStatus.fromMap(siteId, slot, snap.data() as Map<String, dynamic>?));
+  // ---------- Workers ----------
+  Stream<List<Worker>> watchPendingWorkers() {
+    return _workersRef.where('status', isEqualTo: 'pending').snapshots().map((snap) =>
+        snap.docs.map((d) => Worker.fromMap(d.id, d.data() as Map<String, dynamic>?)).toList());
   }
 
-  Future<void> writeGuardStatus({
-    required String siteId,
-    required int slot,
+  /// Approved workers who aren't assigned to a site yet.
+  Stream<List<Worker>> watchUnassignedWorkers() {
+    return _workersRef
+        .where('status', isEqualTo: 'approved')
+        .where('siteId', isNull: true)
+        .snapshots()
+        .map((snap) => snap.docs
+            .map((d) => Worker.fromMap(d.id, d.data() as Map<String, dynamic>?))
+            .where((w) => !w.isBoss)
+            .toList());
+  }
+
+  Stream<List<Worker>> watchWorkersForSite(String siteId) {
+    return _workersRef
+        .where('siteId', isEqualTo: siteId)
+        .where('status', isEqualTo: 'approved')
+        .snapshots()
+        .map((snap) => snap.docs
+            .map((d) => Worker.fromMap(d.id, d.data() as Map<String, dynamic>?))
+            .toList());
+  }
+
+  Future<void> approveAndAssign(String workerId, String siteId) {
+    return _workersRef.doc(workerId).update({'status': 'approved', 'siteId': siteId});
+  }
+
+  Future<void> assignToSite(String workerId, String? siteId) {
+    return _workersRef.doc(workerId).update({'siteId': siteId});
+  }
+
+  Future<void> rejectWorker(String workerId) {
+    return _workersRef.doc(workerId).update({'status': 'rejected'});
+  }
+
+  Future<void> removeWorker(String workerId) {
+    return _workersRef.doc(workerId).delete();
+  }
+
+  // ---------- Live shift status ----------
+  Stream<ShiftStatus> watchStatus(String workerId) {
+    return _statusRef(workerId).snapshots().map(
+        (snap) => ShiftStatus.fromMap(workerId, snap.data() as Map<String, dynamic>?));
+  }
+
+  Future<void> writeStatus({
+    required String workerId,
     required bool onShift,
     required bool inZone,
     double? lat,
     double? lng,
     double? accuracy,
   }) {
-    return _statusRef(siteId, slot).set({
-      'siteId': siteId,
-      'slot': slot,
+    return _statusRef(workerId).set({
       'onShift': onShift,
       'inZone': inZone,
       'lat': lat,
@@ -83,15 +133,19 @@ class FirestoreService {
 
   // ---------- Events log (per site) ----------
   Future<void> logEvent({
+    required String workerId,
+    required String workerName,
+    required String role,
     required String siteId,
-    required int slot,
     required String type, // enter | exit | shift_start | shift_end
     double? lat,
     double? lng,
   }) {
     return _eventsRef.add({
+      'workerId': workerId,
+      'workerName': workerName,
+      'role': role,
       'siteId': siteId,
-      'slot': slot,
       'type': type,
       'timestamp': DateTime.now().millisecondsSinceEpoch,
       'lat': lat,

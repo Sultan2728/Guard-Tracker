@@ -4,15 +4,17 @@ import 'package:geolocator/geolocator.dart';
 import '../models/guard_status.dart';
 import 'firestore_service.dart';
 
-/// Watches this guard's GPS position for one shift at one site, compares
-/// it against that site's geofence, and writes the resulting in/out
-/// status + a log entry whenever the guard crosses the boundary. Uses a
-/// small hysteresis buffer so GPS jitter right at the edge of the zone
-/// doesn't spam enter/exit events back-to-back.
+/// Watches one worker's GPS position for one shift at their assigned
+/// site, compares it against that site's geofence, and writes the
+/// resulting in/out status + a log entry whenever they cross the
+/// boundary. Uses a small hysteresis buffer so GPS jitter right at the
+/// edge of the zone doesn't spam enter/exit events back-to-back.
 class LocationService {
   final FirestoreService firestore;
+  final String workerId;
+  final String workerName;
+  final String role;
   final String siteId;
-  final int slot;
 
   static const double exitBufferM = 15; // exit threshold = radius + buffer
 
@@ -20,7 +22,13 @@ class LocationService {
   Site? _site;
   bool? _currentInZone;
 
-  LocationService({required this.firestore, required this.siteId, required this.slot});
+  LocationService({
+    required this.firestore,
+    required this.workerId,
+    required this.workerName,
+    required this.role,
+    required this.siteId,
+  });
 
   Future<bool> ensurePermissions() async {
     LocationPermission perm = await Geolocator.checkPermission();
@@ -54,7 +62,9 @@ class LocationService {
 
   /// Starts the shift: logs shift_start and begins the position stream.
   Future<void> startShift({required void Function(bool inZone, double distanceM) onUpdate}) async {
-    await firestore.logEvent(siteId: siteId, slot: slot, type: 'shift_start');
+    await firestore.logEvent(
+      workerId: workerId, workerName: workerName, role: role, siteId: siteId, type: 'shift_start',
+    );
 
     const settings = LocationSettings(
       accuracy: LocationAccuracy.high,
@@ -64,8 +74,8 @@ class LocationService {
     _sub = Geolocator.getPositionStream(locationSettings: settings).listen((pos) async {
       final site = _site;
       if (site == null) {
-        await firestore.writeGuardStatus(
-          siteId: siteId, slot: slot, onShift: true, inZone: false,
+        await firestore.writeStatus(
+          workerId: workerId, onShift: true, inZone: false,
           lat: pos.latitude, lng: pos.longitude, accuracy: pos.accuracy,
         );
         return;
@@ -83,17 +93,18 @@ class LocationService {
       if (inZone != _currentInZone) {
         _currentInZone = inZone;
         await firestore.logEvent(
+          workerId: workerId,
+          workerName: workerName,
+          role: role,
           siteId: siteId,
-          slot: slot,
           type: inZone ? 'enter' : 'exit',
           lat: pos.latitude,
           lng: pos.longitude,
         );
       }
 
-      await firestore.writeGuardStatus(
-        siteId: siteId,
-        slot: slot,
+      await firestore.writeStatus(
+        workerId: workerId,
         onShift: true,
         inZone: inZone,
         lat: pos.latitude,
@@ -109,8 +120,10 @@ class LocationService {
     await _sub?.cancel();
     _sub = null;
     _currentInZone = null;
-    await firestore.logEvent(siteId: siteId, slot: slot, type: 'shift_end');
-    await firestore.writeGuardStatus(siteId: siteId, slot: slot, onShift: false, inZone: false);
+    await firestore.logEvent(
+      workerId: workerId, workerName: workerName, role: role, siteId: siteId, type: 'shift_end',
+    );
+    await firestore.writeStatus(workerId: workerId, onShift: false, inZone: false);
   }
 
   void dispose() {

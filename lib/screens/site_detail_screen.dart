@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import '../models/guard_status.dart';
+import '../models/worker.dart';
 import '../services/firestore_service.dart';
 import 'map_picker_screen.dart';
 
 /// Boss's view of a single site (e.g. one ЖК): its geofence settings,
-/// the live status of its 3 guard slots, and its event log.
+/// the live status of every worker assigned to it, and its event log.
 class SiteDetailScreen extends StatefulWidget {
   final Site site;
   const SiteDetailScreen({super.key, required this.site});
@@ -102,7 +103,7 @@ class _SiteDetailScreenState extends State<SiteDetailScreen> {
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('Удалить объект?'),
-        content: Text('«${widget.site.name}» и статусы его охранников будут удалены безвозвратно.'),
+        content: Text('«${widget.site.name}» будет удалён безвозвратно. Назначенные сотрудники останутся без объекта.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Отмена')),
           TextButton(
@@ -118,6 +119,23 @@ class _SiteDetailScreenState extends State<SiteDetailScreen> {
     }
   }
 
+  Future<void> _confirmRemoveWorker(Worker w) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Снять с объекта?'),
+        content: Text('${w.name} больше не будет закреплён за «${widget.site.name}».'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Отмена')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Снять')),
+        ],
+      ),
+    );
+    if (ok == true) {
+      await _firestore.assignToSite(w.id, null);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -130,7 +148,7 @@ class _SiteDetailScreenState extends State<SiteDetailScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          _sectionCard('Охранники', _guardList()),
+          _sectionCard('Сотрудники', _workerList()),
           const SizedBox(height: 14),
           _sectionCard('Зона объекта', _zoneSetup()),
           const SizedBox(height: 14),
@@ -157,44 +175,69 @@ class _SiteDetailScreenState extends State<SiteDetailScreen> {
     );
   }
 
-  Widget _guardList() {
-    return Column(
-      children: [1, 2, 3].map((slot) {
-        return StreamBuilder<GuardStatus>(
-          stream: _firestore.watchGuard(widget.site.id, slot),
-          builder: (context, snap) {
-            final s = snap.data;
-            String label = 'Нет данных';
-            MaterialColor color = Colors.grey;
-            String meta = '';
-            if (s != null) {
-              if (!s.onShift) {
-                label = 'Не на смене';
-                color = Colors.grey;
-              } else if (s.inZone) {
-                label = 'В зоне';
-                color = Colors.green;
-              } else {
-                label = 'Вне зоны';
-                color = Colors.red;
-              }
-              if (s.updatedAt != null) {
-                meta = 'Обновлено: ${_fmtTime(s.updatedAt!)}';
-              }
-            }
-            return ListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text('Охранник $slot', style: const TextStyle(fontWeight: FontWeight.w600)),
-              subtitle: meta.isNotEmpty ? Text(meta, style: const TextStyle(fontSize: 12)) : null,
-              trailing: Chip(
-                label: Text(label, style: TextStyle(color: color.shade800, fontWeight: FontWeight.bold, fontSize: 12)),
-                backgroundColor: color.shade50,
-                side: BorderSide.none,
-              ),
+  Widget _workerList() {
+    return StreamBuilder<List<Worker>>(
+      stream: _firestore.watchWorkersForSite(widget.site.id),
+      builder: (context, snap) {
+        final workers = snap.data ?? [];
+        if (workers.isEmpty) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 8),
+            child: Text('На этот объект пока никто не назначен.', style: TextStyle(color: Colors.grey)),
+          );
+        }
+        return Column(
+          children: workers.map((w) {
+            return StreamBuilder<ShiftStatus>(
+              stream: _firestore.watchStatus(w.id),
+              builder: (context, statusSnap) {
+                final s = statusSnap.data;
+                String label = 'Нет данных';
+                MaterialColor color = Colors.grey;
+                String meta = '';
+                if (s != null) {
+                  if (!s.onShift) {
+                    label = 'Не на смене';
+                    color = Colors.grey;
+                  } else if (s.inZone) {
+                    label = 'В зоне';
+                    color = Colors.green;
+                  } else {
+                    label = 'Вне зоны';
+                    color = Colors.red;
+                  }
+                  if (s.updatedAt != null) {
+                    meta = 'Обновлено: ${_fmtTime(s.updatedAt!)}';
+                  }
+                }
+                return ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(w.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                  subtitle: Text(
+                    [w.role, if (meta.isNotEmpty) meta].join(' · '),
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Chip(
+                        label: Text(label, style: TextStyle(color: color.shade800, fontWeight: FontWeight.bold, fontSize: 12)),
+                        backgroundColor: color.shade50,
+                        side: BorderSide.none,
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.person_remove_outlined, size: 20),
+                        tooltip: 'Снять с объекта',
+                        onPressed: () => _confirmRemoveWorker(w),
+                      ),
+                    ],
+                  ),
+                );
+              },
             );
-          },
+          }).toList(),
         );
-      }).toList(),
+      },
     );
   }
 
@@ -263,13 +306,16 @@ class _SiteDetailScreenState extends State<SiteDetailScreen> {
             return Column(
               children: events.map((e) {
                 final ts = DateTime.fromMillisecondsSinceEpoch(e['timestamp']);
+                final who = e['workerName'] ?? e['role'] ?? 'Сотрудник';
                 return Padding(
                   padding: const EdgeInsets.symmetric(vertical: 6),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text('Охранник ${e['slot']} — ${_typeLabels[e['type']] ?? e['type']}',
-                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                      Expanded(
+                        child: Text('$who — ${_typeLabels[e['type']] ?? e['type']}',
+                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                      ),
                       Text(_fmtTime(ts), style: const TextStyle(color: Colors.grey, fontSize: 12)),
                     ],
                   ),

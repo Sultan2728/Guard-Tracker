@@ -1,5 +1,5 @@
 /// A security site (e.g. a residential complex / ЖК) with its own geofence.
-/// A boss can manage several of these; a guard picks one before a shift.
+/// A boss can manage several of these; workers get assigned to one.
 class Site {
   final String id;
   final String name;
@@ -33,9 +33,10 @@ class Site {
       };
 }
 
-class GuardStatus {
-  final String siteId;
-  final int slot;
+/// A worker's live on-shift / in-zone status, keyed by their own worker id
+/// (the Firebase Auth uid) rather than a fixed slot number.
+class ShiftStatus {
+  final String workerId;
   final bool onShift;
   final bool inZone;
   final double? lat;
@@ -43,9 +44,8 @@ class GuardStatus {
   final double? accuracy;
   final DateTime? updatedAt;
 
-  GuardStatus({
-    required this.siteId,
-    required this.slot,
+  ShiftStatus({
+    required this.workerId,
     required this.onShift,
     required this.inZone,
     this.lat,
@@ -54,13 +54,12 @@ class GuardStatus {
     this.updatedAt,
   });
 
-  factory GuardStatus.fromMap(String siteId, int slot, Map<String, dynamic>? map) {
+  factory ShiftStatus.fromMap(String workerId, Map<String, dynamic>? map) {
     if (map == null) {
-      return GuardStatus(siteId: siteId, slot: slot, onShift: false, inZone: false);
+      return ShiftStatus(workerId: workerId, onShift: false, inZone: false);
     }
-    return GuardStatus(
-      siteId: siteId,
-      slot: slot,
+    return ShiftStatus(
+      workerId: workerId,
       onShift: map['onShift'] ?? false,
       inZone: map['inZone'] ?? false,
       lat: (map['lat'] as num?)?.toDouble(),
