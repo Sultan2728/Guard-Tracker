@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
+import '../utils/validators.dart';
 import 'register_screen.dart';
 
 /// The app's entry point when nobody is signed in: a login form, with a
@@ -27,6 +28,11 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 
   Future<void> _login() async {
+    final phoneErr = validatePhone(_phoneCtrl.text);
+    if (phoneErr != null || _passwordCtrl.text.isEmpty) {
+      setState(() => _error = phoneErr ?? 'Введите пароль.');
+      return;
+    }
     setState(() {
       _loading = true;
       _error = null;

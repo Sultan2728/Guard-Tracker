@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../models/worker.dart';
 import '../services/auth_service.dart';
+import '../utils/validators.dart';
 
 /// Registration for a new worker (guard, cleaner, plumber, …) or a new
 /// boss account. Worker accounts start 'pending' until the boss approves
@@ -25,6 +26,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   String _role = kWorkerRoles.first;
   bool _loading = false;
   String? _error;
+  String? _nameErr, _phoneErr, _roleErr, _passErr, _confirmErr;
 
   @override
   void dispose() {
@@ -42,18 +44,20 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final password = _passwordCtrl.text;
     final role = _role == 'Другое' ? _customRoleCtrl.text.trim() : _role;
 
-    if (name.isEmpty || phone.isEmpty || password.isEmpty) {
-      setState(() => _error = 'Заполните все поля.');
-      return;
-    }
-    if (!_isBoss && role.isEmpty) {
-      setState(() => _error = 'Укажите должность.');
-      return;
-    }
-    if (password != _passwordConfirmCtrl.text) {
-      setState(() => _error = 'Пароли не совпадают.');
-      return;
-    }
+    final nameErr = validateName(name);
+    final phoneErr = validatePhone(phone);
+    final roleErr = (!_isBoss && _role == 'Другое') ? validateCustomRole(role) : null;
+    final passErr = validatePassword(password);
+    final confirmErr = password != _passwordConfirmCtrl.text ? 'Пароли не совпадают.' : null;
+    setState(() {
+      _nameErr = nameErr;
+      _phoneErr = phoneErr;
+      _roleErr = roleErr;
+      _passErr = passErr;
+      _confirmErr = confirmErr;
+      _error = null;
+    });
+    if ([nameErr, phoneErr, roleErr, passErr, confirmErr].any((e) => e != null)) return;
 
     setState(() {
       _loading = true;
@@ -101,13 +105,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
               const SizedBox(height: 16),
               TextField(
                 controller: _nameCtrl,
-                decoration: const InputDecoration(labelText: 'Имя и фамилия'),
+                decoration: InputDecoration(labelText: 'Имя и фамилия', errorText: _nameErr),
               ),
               const SizedBox(height: 12),
               TextField(
                 controller: _phoneCtrl,
                 keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(labelText: 'Номер телефона', hintText: '+7 7XX XXX XX XX'),
+                decoration: InputDecoration(labelText: 'Номер телефона', hintText: '+7 7XX XXX XX XX', errorText: _phoneErr),
               ),
               if (!_isBoss) ...[
                 const SizedBox(height: 12),
@@ -123,7 +127,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   const SizedBox(height: 12),
                   TextField(
                     controller: _customRoleCtrl,
-                    decoration: const InputDecoration(labelText: 'Укажите должность'),
+                    decoration: InputDecoration(labelText: 'Укажите должность', errorText: _roleErr),
                   ),
                 ],
               ],
@@ -131,13 +135,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
               TextField(
                 controller: _passwordCtrl,
                 obscureText: true,
-                decoration: const InputDecoration(labelText: 'Пароль (минимум 6 символов)'),
+                decoration: InputDecoration(labelText: 'Пароль (6+ символов, буквы и цифры)', errorText: _passErr),
               ),
               const SizedBox(height: 12),
               TextField(
                 controller: _passwordConfirmCtrl,
                 obscureText: true,
-                decoration: const InputDecoration(labelText: 'Повторите пароль'),
+                decoration: InputDecoration(labelText: 'Повторите пароль', errorText: _confirmErr),
               ),
               if (_error != null) ...[
                 const SizedBox(height: 12),

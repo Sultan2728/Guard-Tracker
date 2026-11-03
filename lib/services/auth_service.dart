@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/worker.dart';
+import '../utils/validators.dart';
 
 /// Wraps Firebase Authentication for login/registration, and keeps the
 /// matching Firestore `workers/{uid}` profile document in sync.
@@ -19,7 +20,9 @@ class AuthService {
   User? get currentUser => _auth.currentUser;
   Stream<User?> get authStateChanges => _auth.authStateChanges();
 
-  String normalizePhone(String raw) => raw.replaceAll(RegExp(r'[^0-9]'), '');
+  /// Canonical 11-digit form (7XXXXXXXXXX) so 8-/+7-/bare formats are one account.
+  String normalizePhone(String raw) =>
+      canonicalPhone(raw) ?? raw.replaceAll(RegExp(r'[^0-9]'), '');
 
   String _emailForPhone(String phone) => '${normalizePhone(phone)}@guardtracker.local';
 
