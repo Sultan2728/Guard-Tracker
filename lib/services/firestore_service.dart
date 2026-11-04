@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/guard_status.dart';
 import '../models/worker.dart';
+import '../models/shift.dart';
 
 /// Wraps all Firestore reads/writes so the rest of the app never touches
 /// collection/document paths directly.
@@ -17,6 +18,7 @@ class FirestoreService {
   CollectionReference get _sitesRef => _db.collection('sites');
   CollectionReference get _workersRef => _db.collection('workers');
   DocumentReference _statusRef(String workerId) => _db.collection('status').doc(workerId);
+  CollectionReference get _shiftsRef => _db.collection('shifts');
   CollectionReference get _eventsRef => _db.collection('events');
   DocumentReference _tokenRef(String id) => _db.collection('tokens').doc(id);
 
@@ -128,6 +130,49 @@ class FirestoreService {
       'lng': lng,
       'accuracy': accuracy,
       'updatedAt': DateTime.now().millisecondsSinceEpoch,
+    });
+  }
+
+  // ---------- Shifts (worked hours) ----------
+  Future<String> startShiftRecord({
+    required String workerId,
+    required String workerName,
+    required String role,
+    required String siteId,
+    required int startedAt,
+  }) async {
+    final ref = await _shiftsRef.add({
+      'workerId': workerId,
+      'workerName': workerName,
+      'role': role,
+      'siteId': siteId,
+      'startedAt': startedAt,
+      'endedAt': null,
+      'inZoneMs': 0,
+    });
+    return ref.id;
+  }
+
+  Future<void> updateShiftRecord(String shiftId, {required int inZoneMs, int? endedAt}) {
+    return _shiftsRef.doc(shiftId).update({
+      'inZoneMs': inZoneMs,
+      if (endedAt != null) 'endedAt': endedAt,
+    });
+  }
+
+  /// All shifts started on/after [sinceMs] (single-field query, no index).
+  Stream<List<Shift>> watchShiftsSince(int sinceMs) {
+    return _shiftsRef.where('startedAt', isGreaterThanOrEqualTo: sinceMs).snapshots().map((snap) =>
+        snap.docs.map((d) => Shift.fromMap(d.id, d.data() as Map<String, dynamic>)).toList());
+  }
+
+  /// One worker's shifts (sorted newest first on the client, to avoid
+  /// needing a composite index).
+  Stream<List<Shift>> watchShiftsForWorker(String workerId) {
+    return _shiftsRef.where('workerId', isEqualTo: workerId).snapshots().map((snap) {
+      final list = snap.docs.map((d) => Shift.fromMap(d.id, d.data() as Map<String, dynamic>)).toList();
+      list.sort((a, b) => b.startedAt.compareTo(a.startedAt));
+      return list;
     });
   }
 

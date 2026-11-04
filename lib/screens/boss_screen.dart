@@ -8,6 +8,7 @@ import '../services/notification_service.dart';
 import 'site_detail_screen.dart';
 import 'map_picker_screen.dart';
 import 'employees_screen.dart';
+import 'hours_report_screen.dart';
 
 /// Boss's home screen: the list of all managed sites (e.g. several ЖК),
 /// each with a quick status summary. Tap a site to see its workers, zone
@@ -59,6 +60,14 @@ class _BossScreenState extends State<BossScreen> {
                 ),
               );
             },
+          ),
+          IconButton(
+            icon: const Icon(Icons.schedule),
+            tooltip: 'Отчёт по часам',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const HoursReportScreen()),
+            ),
           ),
           IconButton(
             icon: const Icon(Icons.logout),

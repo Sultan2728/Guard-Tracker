@@ -22,6 +22,11 @@ class LocationService {
   Site? _site;
   bool? _currentInZone;
 
+  // Worked-hours bookkeeping for the current shift.
+  String? _shiftId;
+  int _inZoneMs = 0;
+  int? _lastTickMs;
+
   LocationService({
     required this.firestore,
     required this.workerId,
@@ -65,6 +70,12 @@ class LocationService {
     await firestore.logEvent(
       workerId: workerId, workerName: workerName, role: role, siteId: siteId, type: 'shift_start',
     );
+    _inZoneMs = 0;
+    _lastTickMs = null;
+    _shiftId = await firestore.startShiftRecord(
+      workerId: workerId, workerName: workerName, role: role, siteId: siteId,
+      startedAt: DateTime.now().millisecondsSinceEpoch,
+    );
 
     const settings = LocationSettings(
       accuracy: LocationAccuracy.high,
@@ -72,6 +83,11 @@ class LocationService {
     );
 
     _sub = Geolocator.getPositionStream(locationSettings: settings).listen((pos) async {
+      // Add the time since the previous reading if the worker was in the zone.
+      final tick = DateTime.now().millisecondsSinceEpoch;
+      if (_lastTickMs != null && _currentInZone == true) _inZoneMs += tick - _lastTickMs!;
+      _lastTickMs = tick;
+
       final site = _site;
       if (site == null) {
         await firestore.writeStatus(
@@ -101,6 +117,7 @@ class LocationService {
           lat: pos.latitude,
           lng: pos.longitude,
         );
+        if (_shiftId != null) await firestore.updateShiftRecord(_shiftId!, inZoneMs: _inZoneMs);
       }
 
       await firestore.writeStatus(
@@ -119,6 +136,13 @@ class LocationService {
   Future<void> endShift() async {
     await _sub?.cancel();
     _sub = null;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    if (_lastTickMs != null && _currentInZone == true) _inZoneMs += now - _lastTickMs!;
+    if (_shiftId != null) {
+      await firestore.updateShiftRecord(_shiftId!, inZoneMs: _inZoneMs, endedAt: now);
+      _shiftId = null;
+    }
+    _lastTickMs = null;
     _currentInZone = null;
     await firestore.logEvent(
       workerId: workerId, workerName: workerName, role: role, siteId: siteId, type: 'shift_end',

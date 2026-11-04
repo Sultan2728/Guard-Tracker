@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/guard_status.dart';
 import '../models/worker.dart';
+import '../models/shift.dart';
 import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
 import '../services/location_service.dart';
@@ -26,11 +28,15 @@ class _WorkerShiftScreenState extends State<WorkerShiftScreen> {
   bool? _inZone;
   double? _distanceToEdge;
   Site? _site;
+  Timer? _clock; // refreshes the running shift's hours every minute
   String _note = 'Потребуется доступ к геолокации. Держите приложение запущенным во время смены.';
 
   @override
   void initState() {
     super.initState();
+    _clock = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (mounted && _onShift) setState(() {});
+    });
     _location = LocationService(
       firestore: _firestore,
       workerId: widget.worker.id,
@@ -78,6 +84,7 @@ class _WorkerShiftScreenState extends State<WorkerShiftScreen> {
 
   @override
   void dispose() {
+    _clock?.cancel();
     _location.dispose();
     super.dispose();
   }
@@ -108,6 +115,39 @@ class _WorkerShiftScreenState extends State<WorkerShiftScreen> {
     if (_distanceToEdge == null) return '';
     if (_inZone == true) return 'До границы зоны: ${_distanceToEdge!.round()} м';
     return 'До зоны: ${(-_distanceToEdge!).round()} м';
+  }
+
+  Widget _hoursCard() {
+    return StreamBuilder<List<Shift>>(
+      stream: _firestore.watchShiftsForWorker(widget.worker.id),
+      builder: (context, snap) {
+        final shifts = snap.data ?? [];
+        int sum(DateTime from) => shifts
+            .where((s) => !s.startedAt.isBefore(from))
+            .fold<int>(0, (a, s) => a + s.durationMs());
+        Widget cell(String label, int ms) => Expanded(
+              child: Column(
+                children: [
+                  Text(fmtDuration(ms), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 2),
+                  Text(label, style: const TextStyle(color: OnsiteColors.muted, fontSize: 12)),
+                ],
+              ),
+            );
+        return Card(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+            child: Row(
+              children: [
+                cell('Сегодня', sum(startOfToday())),
+                cell('Неделя', sum(startOfWeek())),
+                cell('Месяц', sum(startOfMonth())),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -141,7 +181,9 @@ class _WorkerShiftScreenState extends State<WorkerShiftScreen> {
                 ],
               ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 14),
+            _hoursCard(),
+            const SizedBox(height: 14),
             FilledButton(
               style: FilledButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 16),
