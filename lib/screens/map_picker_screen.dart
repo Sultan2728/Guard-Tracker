@@ -116,8 +116,8 @@ class _MapPickerScreenState extends State<MapPickerScreen> {
                           point: _center,
                           radius: _radiusM,
                           useRadiusInMeter: true,
-                          color: Colors.blue.withValues(alpha: 0.15),
-                          borderColor: Colors.blue,
+                          color: const Color(0xFF2DD4BF).withValues(alpha: 0.22),
+                          borderColor: const Color(0xFF2DD4BF),
                           borderStrokeWidth: 2,
                         ),
                       ],
@@ -148,7 +148,7 @@ class _MapPickerScreenState extends State<MapPickerScreen> {
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
             decoration: BoxDecoration(
               color: Theme.of(context).scaffoldBackgroundColor,
-              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 8, offset: const Offset(0, -2))],
+              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.4), blurRadius: 8, offset: const Offset(0, -2))],
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,

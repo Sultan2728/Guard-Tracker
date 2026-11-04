@@ -1,5 +1,5 @@
 name: guard_tracker
-description: "Трекер охраны — контроль входа/выхода из зоны объекта"
+description: "Onsite — контроль присутствия сотрудников на объекте"
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -42,9 +42,11 @@ flutter_launcher_icons:
   android: true
   ios: true
   image_path: "assets/icon/icon.png"
-  adaptive_icon_background: "#1565C0"
+  adaptive_icon_background: "#0F1E38"
   adaptive_icon_foreground: "assets/icon/icon_foreground.png"
   remove_alpha_ios: true
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/icon/icon.png

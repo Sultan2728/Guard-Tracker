@@ -4,6 +4,7 @@ import '../models/worker.dart';
 import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
 import '../services/location_service.dart';
+import '../theme.dart';
 
 /// A worker's (guard, cleaner, plumber, …) shift screen: start/stop the
 /// shift, see whether they're currently inside their assigned site's
@@ -82,17 +83,17 @@ class _WorkerShiftScreenState extends State<WorkerShiftScreen> {
   }
 
   Color _bannerColor() {
-    if (!_onShift) return Colors.grey.shade200;
-    if (_inZone == true) return Colors.green.shade50;
-    if (_inZone == false) return Colors.red.shade50;
-    return Colors.grey.shade200;
+    if (!_onShift) return const Color(0xFF1A2740);
+    if (_inZone == true) return OnsiteColors.ok.withValues(alpha: 0.16);
+    if (_inZone == false) return OnsiteColors.bad.withValues(alpha: 0.16);
+    return const Color(0xFF1A2740);
   }
 
   Color _bannerTextColor() {
-    if (!_onShift) return Colors.grey.shade700;
-    if (_inZone == true) return Colors.green.shade800;
-    if (_inZone == false) return Colors.red.shade800;
-    return Colors.grey.shade700;
+    if (!_onShift) return OnsiteColors.muted;
+    if (_inZone == true) return OnsiteColors.ok;
+    if (_inZone == false) return OnsiteColors.bad;
+    return OnsiteColors.muted;
   }
 
   String _bannerTitle() {
@@ -129,7 +130,7 @@ class _WorkerShiftScreenState extends State<WorkerShiftScreen> {
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
                 color: _bannerColor(),
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(24),
               ),
               child: Column(
                 children: [
@@ -144,7 +145,8 @@ class _WorkerShiftScreenState extends State<WorkerShiftScreen> {
             FilledButton(
               style: FilledButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 16),
-                backgroundColor: _onShift ? Colors.red : null,
+                backgroundColor: _onShift ? OnsiteColors.bad : null,
+                foregroundColor: _onShift ? Colors.white : null,
               ),
               onPressed: _toggleShift,
               child: Text(_onShift ? 'Закончить смену' : 'Начать смену', style: const TextStyle(fontSize: 16)),

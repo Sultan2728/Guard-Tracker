@@ -221,8 +221,8 @@ class _SiteDetailScreenState extends State<SiteDetailScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Chip(
-                        label: Text(label, style: TextStyle(color: color.shade800, fontWeight: FontWeight.bold, fontSize: 12)),
-                        backgroundColor: color.shade50,
+                        label: Text(label, style: TextStyle(color: color.shade200, fontWeight: FontWeight.bold, fontSize: 12)),
+                        backgroundColor: color.withValues(alpha: 0.18),
                         side: BorderSide.none,
                       ),
                       IconButton(
@@ -293,7 +293,7 @@ class _SiteDetailScreenState extends State<SiteDetailScreen> {
                   'Не удалось загрузить журнал. Если ошибка упоминает '
                   '"index", откройте ссылку из неё в логах Android Studio '
                   'и нажмите "Create index" в Firebase.',
-                  style: TextStyle(color: Colors.red.shade700, fontSize: 12),
+                  style: TextStyle(color: Colors.redAccent, fontSize: 12),
                 ),
               );
             }

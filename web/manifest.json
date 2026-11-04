@@ -1,6 +1,6 @@
 {
-    "name": "guard_tracker",
-    "short_name": "guard_tracker",
+    "name": "Onsite",
+    "short_name": "Onsite",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

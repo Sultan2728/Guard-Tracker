@@ -145,7 +145,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ),
               if (_error != null) ...[
                 const SizedBox(height: 12),
-                Text(_error!, style: TextStyle(color: Colors.red.shade700, fontSize: 13)),
+                Text(_error!, style: TextStyle(color: Colors.redAccent, fontSize: 13)),
               ],
               const SizedBox(height: 20),
               FilledButton(
@@ -154,7 +154,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 child: _loading
                     ? const SizedBox(
                         width: 20, height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF04201C)),
                       )
                     : const Text('Зарегистрироваться'),
               ),

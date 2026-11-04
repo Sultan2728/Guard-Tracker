@@ -26,7 +26,7 @@ class _BossScreenState extends State<BossScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('👔 Объекты'),
+        title: const Text('Объекты'),
         actions: [
           StreamBuilder<List<Worker>>(
             stream: _firestore.watchPendingWorkers(),
@@ -246,8 +246,8 @@ class _SiteCard extends StatelessWidget {
                             color = s.inZone ? Colors.green : Colors.red;
                           }
                           return Chip(
-                            label: Text(w.name, style: TextStyle(color: color.shade800, fontSize: 12)),
-                            backgroundColor: color.shade50,
+                            label: Text(w.name, style: TextStyle(color: color.shade200, fontSize: 12, fontWeight: FontWeight.w600)),
+                            backgroundColor: color.withValues(alpha: 0.18),
                             side: BorderSide.none,
                             visualDensity: VisualDensity.compact,
                           );

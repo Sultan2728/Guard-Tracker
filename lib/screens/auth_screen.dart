@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import '../utils/validators.dart';
+import '../theme.dart';
 import 'register_screen.dart';
 
 /// The app's entry point when nobody is signed in: a login form, with a
@@ -60,12 +61,23 @@ class _AuthScreenState extends State<AuthScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Text('🛡️', style: TextStyle(fontSize: 48)),
+                Center(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(22),
+                    child: Image.asset('assets/icon/icon.png', width: 88, height: 88),
+                  ),
+                ),
                 const SizedBox(height: 8),
                 const Text(
-                  'Охранный Трекер',
+                  'Onsite',
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                  style: TextStyle(fontSize: 30, fontWeight: FontWeight.w800, letterSpacing: 0.5),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'Контроль присутствия на объекте',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: OnsiteColors.muted),
                 ),
                 const SizedBox(height: 24),
                 TextField(
@@ -81,7 +93,7 @@ class _AuthScreenState extends State<AuthScreen> {
                 ),
                 if (_error != null) ...[
                   const SizedBox(height: 12),
-                  Text(_error!, style: TextStyle(color: Colors.red.shade700, fontSize: 13)),
+                  Text(_error!, style: TextStyle(color: OnsiteColors.bad, fontSize: 13)),
                 ],
                 const SizedBox(height: 20),
                 FilledButton(
@@ -90,7 +102,7 @@ class _AuthScreenState extends State<AuthScreen> {
                   child: _loading
                       ? const SizedBox(
                           width: 20, height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF04201C)),
                         )
                       : const Text('Войти'),
                 ),
