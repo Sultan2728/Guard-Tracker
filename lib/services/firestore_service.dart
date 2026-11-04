@@ -175,8 +175,24 @@ class FirestoreService {
     }
   }
 
-  // ---------- Push notification tokens ----------
-  Future<void> saveFcmToken(String id, String token) {
-    return _tokenRef(id).set({'fcmToken': token});
+  // ---------- Push notification tokens / live alerts ----------
+  Future<void> saveFcmToken(String id, String token, {bool isBoss = false}) {
+    return _tokenRef(id).set({
+      'fcmToken': token,
+      'isBoss': isBoss,
+      'updatedAt': DateTime.now().millisecondsSinceEpoch,
+    });
+  }
+
+  /// Events created after [sinceMs] (all sites), oldest first. Used for the
+  /// boss's live in-app alerts. Single-field range query: no index needed.
+  Stream<Map<String, dynamic>> watchNewEvents(int sinceMs) {
+    return _eventsRef
+        .where('timestamp', isGreaterThan: sinceMs)
+        .orderBy('timestamp')
+        .snapshots()
+        .expand((snap) => snap.docChanges
+            .where((c) => c.type == DocumentChangeType.added)
+            .map((c) => {...c.doc.data() as Map<String, dynamic>, 'id': c.doc.id}));
   }
 }

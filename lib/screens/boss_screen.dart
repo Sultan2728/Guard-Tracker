@@ -4,6 +4,7 @@ import '../models/guard_status.dart';
 import '../models/worker.dart';
 import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
+import '../services/notification_service.dart';
 import 'site_detail_screen.dart';
 import 'map_picker_screen.dart';
 import 'employees_screen.dart';
@@ -21,6 +22,19 @@ class BossScreen extends StatefulWidget {
 
 class _BossScreenState extends State<BossScreen> {
   final _firestore = FirestoreService();
+
+  @override
+  void initState() {
+    super.initState();
+    final uid = AuthService().currentUser?.uid;
+    if (uid != null) NotificationService.instance.startForBoss(uid);
+  }
+
+  @override
+  void dispose() {
+    NotificationService.instance.stop();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
